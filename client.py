@@ -22,3 +22,13 @@ Client Side:
                 No additional info
             
 """
+import socket
+
+def log_in():
+    pass
+
+server_ip = socket.gethostname()
+port = 8000
+
+client_cserver_socket = socket.socket()
+client_cserver_socket.connect((server_ip, port))
