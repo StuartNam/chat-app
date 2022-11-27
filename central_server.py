@@ -6,11 +6,11 @@ from threading import *
 accounts = []
 active_threads = []
 active_conns = []
-
+active_user = [] #(username, IP address)
 # Server sending
 def server_feedback():
     signal = True
-    while 
+    pass
 
 def server_receive(conn):
     client_request = 1
@@ -21,10 +21,10 @@ def server_receive(conn):
         if client_request == 0:
             # Disconnect request
             # Send disconnect message to send thread and disconnect
-            server_feedback(signal)
+            server_feedback(server_signal)
             pass
         elif client_request == 1:
-            server_feedback(signal)
+            server_feedback(server_signal)
             # Connect request
             pass
         elif client_request == 2:
@@ -49,6 +49,9 @@ def mainloop():
     while True:
         conn, addr = cserver_socket.accept()
         thread_send = Thread()
+
+if __name__ == "__main__":
+    mainloop()
 
 
 
