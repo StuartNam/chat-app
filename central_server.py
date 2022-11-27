@@ -43,12 +43,12 @@ def mainloop():
     port = 8000
 
     cserver_socket = socket.socket()
-    server_socket.bind((host, port))
-    server_socket.listen()
+    cserver_socket.bind((host, port))
+    cserver_socket.listen()
 
     while True:
-        conn, addr = server_socket.accept()
-        thread_send = threading.Thread()
+        conn, addr = cserver_socket.accept()
+        thread_send = Thread()
 
 
 
