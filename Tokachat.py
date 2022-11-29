@@ -13,6 +13,8 @@ class TokachatUser():
 def on_closing():
     global req
     global program_phase
+    global ccs_socket
+    global lst_done_threads
 
     req = "disconn"
     program_phase = True
@@ -41,13 +43,16 @@ cs_socket = 0
 ccs_socket = 0
 sc_socket = 0
 
-c_lst_friends = [[["null", -1], "toka"], [["null", -1], "harryhaha"]]
-c_msg_histories = [["toka", []], ["harryhaha", []]]
+lst_running_threads = []
+lst_done_threads = []
 
-def get_friend_list_request(ccs_socket):
+c_lst_friends = []
+c_msg_histories = []
+
+def upd_friend_status_request(ccs_socket):
     global c_lst_friends
 
-    c_req = "gfrlst"
+    c_req = "updfrstt"
     ccs_socket.send(c_req.encode())
     ccs_socket.recv(1024)
     for friend in c_lst_friends:
@@ -70,6 +75,8 @@ def connect_server_request(ccs_socket, s_usname):
     global lbl_chat_usname
     global txt_chat_prompt
     global connected_usname
+    global btn_send
+    global btn_attach_file
 
     c_req = "conn"
     ccs_socket.send(c_req.encode())
@@ -85,6 +92,9 @@ def connect_server_request(ccs_socket, s_usname):
         cs_socket.connect((s_ipaddr, s_port))
         lbl_chat_usname.config(text = s_usname)
         lbl_chat_detail.config(text = "Connected")
+        btn_send.config(state = "normal")   
+        btn_attach_file.config(state = "normal")
+        txt_text_prompt.delete("1.0", tk.END)
         load_chat_promt(s_usname)
         connected_usname = s_usname
         return cs_socket
@@ -92,11 +102,19 @@ def connect_server_request(ccs_socket, s_usname):
         print("Connection failed")
         lbl_chat_usname.config(text = s_usname)
         lbl_chat_detail.config(text = "Not connected")
+
+        txt_chat_prompt.config(state = "normal")
+        txt_chat_prompt.delete("1.0", tk.END)
+        txt_chat_prompt.config(state = "disabled")
+
+        btn_send.config(state = "disabled")
+        btn_attach_file.config(state = "disabled")
         return -1
 
 def disconnect_server_request(ccs_socket):
     c_req = "disconn"
     ccs_socket.send(c_req.encode())
+    ccs_socket.recv(1024)
 
 def send_msg(cs_socket):
     global txt_chat_prompt
@@ -129,10 +147,31 @@ def send_msg(cs_socket):
         c_msg_histories.append([receiver_usname, ["Me: " + msg]])
     print(c_msg_histories)
 
+def get_friend_list_request(ccs_socket):
+    global c_lst_friends
+    global c_usname
+
+    c_req = "gfrlst"
+    ccs_socket.send(c_req.encode())
+    ccs_socket.recv(1024).decode()
+    ccs_socket.send(c_usname.encode())
+    fd_usname = ""
+    while True:
+        fd_usname = ccs_socket.recv(1024).decode()
+        
+        print(fd_usname)
+
+        if fd_usname == "--":
+            break
+        ccs_socket.send("ack".encode())
+        c_lst_friends.append([["null", "-1"], fd_usname])
+
 def server_host():
     global sc_socket
     global ccs_socket
     global program_phase
+    global lst_done_threads
+    global lst_running_threads
 
     while program_phase:
         continue
@@ -159,13 +198,20 @@ def server_host():
     program_phase = True
     sc_socket.listen()
     while True:
-        sc_conn, c_addr = sc_socket.accept()
+        sc_conn, cc_addr = sc_socket.accept()
         print("Server host: Accept connect request")
         s_req_handler_thread = Thread(
             target = server_request_handler,
-            args = (sc_conn, c_addr)
+            args = (sc_conn, cc_addr)
         )
         s_req_handler_thread.start()
+
+        lst_running_threads.append((s_req_handler_thread, cc_addr))
+
+        for thread_info in lst_done_threads:
+            thread, addr = thread_info
+            print("Joining thread {}".format(addr))
+            thread.join()
 
 def program():
     # Connect to central server 
@@ -213,7 +259,8 @@ def program():
     # Request friend list from central server
     server_host_thread = Thread(
         target = server_host,
-        args = ()
+        args = (),
+        daemon = True
     )
     server_host_thread.start()
 
@@ -222,8 +269,10 @@ def program():
         continue
 
     get_friend_list_request(ccs_socket)
+
+    upd_friend_status_request(ccs_socket)
   
-    while True:
+    while req != "disconn":
         program_phase = False
 
         while not program_phase:
@@ -231,8 +280,8 @@ def program():
 
         print("Handling request: " + req)
 
-        if req == "gfrlst":
-            get_friend_list_request(ccs_socket)
+        if req == "updfrstt":
+            upd_friend_status_request(ccs_socket)
         elif req == "conn":
             cs_socket = connect_server_request(ccs_socket, req_args[0])
         elif req == "send":
@@ -244,6 +293,7 @@ def program():
 """
     Event handlers
 """
+
 def grid_friend_list():
     global lst_btn_friends
 
@@ -305,12 +355,18 @@ def btn_friend_handler(event):
     global req
     global req_args
     global program_phase
+    global cs_socket
+
+    c_req = "disconn"
+    if not isinstance(cs_socket, int):
+        cs_socket.send(c_req.encode())
 
     caller = event.widget
     s_usname = caller["text"].split("\n")[0]
     req = "conn"
     req_args = [s_usname]
 
+    load_chat_promt(s_usname)
     program_phase = True
 
 def btn_login_register_req_handler():
@@ -383,7 +439,7 @@ def btn_friend_list_refresh_handler():
     global req
     global program_phase
 
-    req = "gfrlst"
+    req = "updfrstt"
     program_phase = True
 
 def btn_send_handler():
@@ -399,15 +455,23 @@ def btn_send_handler():
 def server_request_handler(sc_conn, c_addr):
     global c_usname
     global connected_usname
-    c_req = "something"
+    c_req = "null"
 
-    while True:
+    while c_req != "disconn":
         print("Local server: Waiting for request ...")
         c_req = sc_conn.recv(1024).decode()
         sc_conn.send("ok".encode())
 
         if (c_req == "disconn"):
-            pass
+            sc_conn.close()
+
+            for thread_info in lst_running_threads:
+                thread, addr = thread_info
+
+                if c_addr == addr:
+                    lst_done_threads.append(thread_info)
+                    lst_running_threads.remove(thread_info)
+
         elif c_req == "send":
             sender_usname = sc_conn.recv(1024).decode()
             sc_conn.send(c_usname.encode())
@@ -931,11 +995,11 @@ btn_send.grid(
 )
 
 program_thread = Thread(
-        target = program
-    )
+    target = program
+)
 
 program_thread.start()
 
 root.mainloop()
 
-
+program_thread.join()

@@ -6,9 +6,20 @@ from threading import *
 # Database
 class TokachatDatabase():
     def __init__(self):
-        self.lst_accs = [("toka", "1"), ("harryhaha", "anhlaai")]
+        self.lst_accs = [
+            ("toka", "1"),
+            ("harryhaha", "2"),
+            ("vananhngungok", "3"),
+            ("winter-oneesan", "4")
+        ]
         self.lst_onl_accs = [] #[username: str, [IP address: str, port: int]]
-    
+        self.lst_user_friends = {
+            "toka": ["vananhngungok", "harryhaha", "winter-oneesan"],
+            "harryhaha": ["toka", "winter-oneesan"],
+            "vananhngungok": ["toka"],
+            "winter-oneesan": ["toka", "harryhaha"]
+        }
+
     def load(self, file):
         pass
 
@@ -155,7 +166,7 @@ class TokachatCentralServer():
 
                 print("CS: Done Update address request")
 
-            elif c_req == "gfrlst":
+            elif c_req == "updfrstt":
                 print("From {}: Get friend list request")
 
                 while True:
@@ -186,6 +197,14 @@ class TokachatCentralServer():
 
                 print("CS: Done Get friend list request")
 
+            elif c_req == "gfrlst":
+                c_usname = csc_conn.recv(1024).decode()
+                print(c_usname)
+                for friend in self.db.lst_user_friends[c_usname]:
+                    csc_conn.send(friend.encode())
+                    self.__confirm_acknowledge(csc_conn)
+                csc_conn.send("--".encode())
+
             else:
                 print("From {}: c_req = {}".format(c_addr, c_req))
                 print(" -> Unknown request")
@@ -200,8 +219,6 @@ class TokachatCentralServer():
         self.sk.listen(100)
 
         while True:
-            time.sleep(1)
-
             csc_conn, c_addr = self.sk.accept()
 
             request_handling_thread = Thread(
