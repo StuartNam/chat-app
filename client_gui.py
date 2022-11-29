@@ -5,11 +5,26 @@ import random
 
 root = tk.Tk()
 
+class TokachatUser():
+    def __init__(self):
+        pass
+
+
+def on_closing():
+    global req
+    global program_phase
+
+    req = "disconn"
+    program_phase = True
+
+    root.destroy()
+
+root.protocol("WM_DELETE_WINDOW", on_closing)
+
 """
     GLOBAL VARIABLE
 """
 logged_in = False
-
 program_phase = False
 server_phase = False
 
@@ -79,8 +94,9 @@ def connect_server_request(ccs_socket, s_usname):
         lbl_chat_detail.config(text = "Not connected")
         return -1
 
-def disconnect_server_request(cs_socket):
-    pass
+def disconnect_server_request(ccs_socket):
+    c_req = "disconn"
+    ccs_socket.send(c_req.encode())
 
 def send_msg(cs_socket):
     global txt_chat_prompt
@@ -125,7 +141,7 @@ def server_host():
     print("Sending address ...")
     s_host_name = socket.gethostname()
     s_ipaddr = socket.gethostbyname(s_host_name)
-    s_port = random.randint(10000, 12000)
+    s_port = random.randint(49152, 65535)
 
     sc_socket = socket.socket()
     sc_socket.bind((s_ipaddr, s_port))
@@ -186,9 +202,11 @@ def program():
 
         cs_res = ccs_socket.recv(1024).decode()
 
+        print(cs_res)
         if (cs_res == "ok"):
             logged_in = True
             c_usname = c_login_usname[:]
+            print("Here")
         else:
             program_phase = False
 
@@ -218,8 +236,9 @@ def program():
         elif req == "conn":
             cs_socket = connect_server_request(ccs_socket, req_args[0])
         elif req == "send":
-            print(cs_socket)
             send_msg(cs_socket)
+        elif req == "disconn":
+            disconnect_server_request(ccs_socket)
 
         
 """
