@@ -57,6 +57,11 @@ c_msg_histories = []
 
 lst_btn_friends = []
 
+self_socket = ""
+
+def add_friend_request(ccs_socket):
+    pass
+
 def upd_friend_status_request(ccs_socket):
     global c_lst_friends
 
@@ -115,19 +120,23 @@ def connect_server_request(ccs_socket, s_usname):
         print("Connection failed")
         lbl_chat_usname.config(text = s_usname)
         lbl_chat_detail.config(text = "Not connected")
-
-        txt_chat_prompt.config(state = "normal")
-        txt_chat_prompt.delete("1.0", tk.END)
-        txt_chat_prompt.config(state = "disabled")
+        
+        load_chat_promt(s_usname)
+        #txt_chat_prompt.config(state = "normal")
+        #txt_chat_prompt.delete("1.0", tk.END)
+        #txt_chat_prompt.config(state = "disabled")
 
         btn_send.config(state = "disabled")
         btn_attach_file.config(state = "disabled")
         return -1
 
-def disconnect_server_request(ccs_socket):
+def disconnect_server_request(ccs_socket, cs_socket):
     c_req = "disconn"
     ccs_socket.send(c_req.encode())
+    cs_socket.send("cdisconn".encode())
     ccs_socket.recv(1024)
+    cs_socket.recv(1024)
+    cs_socket = 0
 
 def send_msg(cs_socket):
     global txt_chat_prompt
@@ -322,8 +331,9 @@ def program():
         elif req == "send":
             send_msg(cs_socket)
         elif req == "disconn":
-            disconnect_server_request(ccs_socket)
-
+            disconnect_server_request(ccs_socket, cs_socket)
+        elif req == "addfr":
+            add_friend_request(ccs_socket)
         
 """
     Event handlers
@@ -380,15 +390,17 @@ def load_chat_promt(s_usname):
     global c_msg_histories
     global txt_chat_prompt
 
+    txt_chat_prompt.config(state = "normal")
+    txt_chat_prompt.delete("1.0", tk.END)
+
     for c_msg_history in c_msg_histories:
         name, hist = c_msg_history
-        if s_usname == name:
-            txt_chat_prompt.config(state = "normal")
-            txt_chat_prompt.delete("1.0", tk.END)
+        if s_usname == name:        
             for msg in hist:
                 txt_chat_prompt.insert(tk.END, msg + "\n")
-            txt_chat_prompt.config(state = "disabled")
-            
+    
+    txt_chat_prompt.config(state = "disabled")
+
 def btn_friend_handler(event):
     global req
     global req_args
@@ -521,25 +533,44 @@ def btn_send_handler():
     program_phase = True
 
 def btn_add_friend_handler():
-    pass
+    global ent_add_friend
+    global req
+    global program_phase
+
+    req = "addfr"
+    program_phase = True
 """
     Thread defintions
 """
 def server_request_handler(sc_conn, c_addr):
     global c_usname
     global connected_usname
+    global btn_send
+    global cs_socket
     c_req = "null"
 
-    while c_req != "disconn":
+    while c_req != "disconn" and c_req != "cdisconn":
         print("Local server: Waiting for request ...")
         c_req = sc_conn.recv(1024).decode()
         sc_conn.send("ok".encode())
 
+        print(c_req)
         if (c_req == "disconn"):
             sc_conn.close()
 
             for thread_info in lst_running_threads:
                 thread, addr = thread_info
+
+                if c_addr == addr:
+                    lst_done_threads.append(thread_info)
+                    lst_running_threads.remove(thread_info)
+
+        elif c_req == "cdisconn":
+            sc_conn.close()
+            btn_send.config(state = "disabled")
+            cs_socket = 0
+            for thread_info in lst_running_threads:
+                _, addr = thread_info
 
                 if c_addr == addr:
                     lst_done_threads.append(thread_info)
@@ -563,6 +594,13 @@ def server_request_handler(sc_conn, c_addr):
             if connected_usname == sender_usname:
                 load_chat_promt(sender_usname)
     
+    for thread_info in lst_running_threads:
+        _, addr = thread_info
+
+        if c_addr == addr:
+            lst_done_threads.append(thread_info)
+            lst_running_threads.remove(thread_info)
+
 # main()
 """
     Login page
@@ -899,9 +937,10 @@ btn_add_friend = tk.Button(
     text = "Add",
     command = btn_add_friend_handler
 )
+
 btn_add_friend.grid(
     row = 2,
-    column = 3
+    column = 3,
 )
 
 ent_add_friend = tk.Entry(
@@ -948,7 +987,6 @@ btn_friends_prev.grid(
     row = 9,
     column = 1,
 )
-
 
 fr_footer = tk.Frame(
     fr_chatwindow,

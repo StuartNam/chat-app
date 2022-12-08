@@ -16,10 +16,10 @@ class TokachatDatabase():
         self.lst_onl_accs = {} #[username: str, [IP address: str, port: int]]
         self.lst_user_friends = {
             "admin": ["toka", "vananhngungok", "harryhaha", "winter-oneesan"],
-            "toka": ["vananhngungok", "harryhaha", "winter-oneesan"],
-            "harryhaha": ["toka", "winter-oneesan"],
-            "vananhngungok": ["toka"],
-            "winter-oneesan": ["toka", "harryhaha"]
+            "toka": ["admin", "vananhngungok", "harryhaha", "winter-oneesan"],
+            "harryhaha": ["admin", "toka", "winter-oneesan"],
+            "vananhngungok": ["admin", "toka"],
+            "winter-oneesan": ["admin", "toka", "harryhaha"]
         }
         self.lst_chat_histories = {}
 
@@ -57,16 +57,13 @@ class TokachatCentralServer():
 
                 csc_conn.close()
                 for key in self.db.lst_onl_accs.keys():
-                    if self.db.lst_onl_accs[key] == c_addr[0]:
+
+                    if self.db.lst_onl_accs[key][1] == c_addr:
                         self.db.lst_onl_accs.pop(key)
                         break
-                """
-                for acc in self.db.lst_onl_accs:
-                    _, addr = acc
+                
+                print("Online: ", self.db.lst_onl_accs)
 
-                    if c_addr[0] == addr[0]:
-                        self.db.lst_onl_accs.remove(acc)
-                """
                 for thread_info in self.lst_running_threads:
                     thread, addr = thread_info
 
@@ -84,7 +81,7 @@ class TokachatCentralServer():
                 if ls_usname in self.db.lst_onl_accs.keys():
                     print(" -> OK")
 
-                    ls_ipaddr, ls_port = self.db.lst_onl_accs[ls_usname]
+                    ls_ipaddr, ls_port = self.db.lst_onl_accs[ls_usname][0]
 
                     # Send address of requested host to client
                     csc_conn.send(ls_ipaddr.encode())
@@ -97,27 +94,6 @@ class TokachatCentralServer():
                     self.__confirm_acknowledge(csc_conn)
                     csc_conn.send("-1".encode())
 
-                """
-                flag = False
-                for acc in self.db.lst_onl_accs:
-                    usname, addr = acc
-                    if usname == ls_usname:
-                        print(" -> OK")
-                        flag = True
-                        ls_ipaddr, ls_port = addr
-
-                        # Send address of requested host to client
-                        csc_conn.send(ls_ipaddr.encode())
-                        self.__confirm_acknowledge(csc_conn)
-
-                        csc_conn.send(str(ls_port).encode())
-                        break
-                if not flag:
-                    print(" -> Failed")
-                    csc_conn.send("null".encode())
-                    self.__confirm_acknowledge(csc_conn)
-                    csc_conn.send("-1".encode())
-                """
                 print("CS to {}: Done Connect request".format(c_addr))
 
             elif c_req == "login":
@@ -203,7 +179,7 @@ class TokachatCentralServer():
 
                 print(" -> OK")
 
-                self.db.lst_onl_accs.update({ls_usname: (ls_ipaddr, ls_port)})
+                self.db.lst_onl_accs.update({ls_usname: [(ls_ipaddr, ls_port), c_addr]})
 
                 print("CS: Done Update address request")
 
@@ -217,7 +193,7 @@ class TokachatCentralServer():
                         break
 
                     if fd_usname in self.db.lst_onl_accs.keys():
-                        ipaddr, port = self.db.lst_onl_accs[fd_usname]
+                        ipaddr, port = self.db.lst_onl_accs[fd_usname][0]
 
                         csc_conn.send(ipaddr.encode())
                         self.__confirm_acknowledge(csc_conn)
