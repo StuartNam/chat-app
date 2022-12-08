@@ -1,7 +1,10 @@
 import tkinter as tk
+import tkinter.scrolledtext as scrolledtext
+
 from threading import *
 import socket
 import random
+import time
 
 root = tk.Tk()
 
@@ -35,6 +38,9 @@ c_req = ""
 req_args = []
 c_login_usname = ""
 c_login_psword = ""
+c_reg_usname = ""
+c_reg_psword = ""
+
 c_usname = ""
 connected_usname = ""
 cs_res = ""
@@ -49,12 +55,17 @@ lst_done_threads = []
 c_lst_friends = []
 c_msg_histories = []
 
+lst_btn_friends = []
+
 def upd_friend_status_request(ccs_socket):
     global c_lst_friends
+
+    get_friend_list_request(ccs_socket)
 
     c_req = "updfrstt"
     ccs_socket.send(c_req.encode())
     ccs_socket.recv(1024)
+    print(c_lst_friends)
     for friend in c_lst_friends:
         _, fd_usname = friend
         ccs_socket.send(fd_usname.encode())
@@ -68,6 +79,7 @@ def upd_friend_status_request(ccs_socket):
         print(friend)
 
     ccs_socket.send("--".encode())
+
     grid_friend_list()
 
 def connect_server_request(ccs_socket, s_usname):
@@ -92,6 +104,7 @@ def connect_server_request(ccs_socket, s_usname):
         cs_socket.connect((s_ipaddr, s_port))
         lbl_chat_usname.config(text = s_usname)
         lbl_chat_detail.config(text = "Connected")
+        txt_text_prompt.config(state = "normal")
         btn_send.config(state = "normal")   
         btn_attach_file.config(state = "normal")
         txt_text_prompt.delete("1.0", tk.END)
@@ -151,6 +164,7 @@ def get_friend_list_request(ccs_socket):
     global c_lst_friends
     global c_usname
 
+    c_lst_friends = []
     c_req = "gfrlst"
     ccs_socket.send(c_req.encode())
     ccs_socket.recv(1024).decode()
@@ -238,25 +252,47 @@ def program():
     # Login or register
     while not logged_in:
         while not program_phase:
+            time.sleep(0.1)
             continue
 
-        c_req = "login"
-        ccs_socket.send(c_req.encode())
-        ccs_socket.recv(1024)
-        ccs_socket.send(c_login_usname.encode())
-        ccs_socket.send(c_login_psword.encode())
+        if c_req == "login":
+            ccs_socket.send(c_req.encode())
+            ccs_socket.recv(1024)
+            ccs_socket.send(c_login_usname.encode())
+            ccs_socket.recv(1024)
+            ccs_socket.send(c_login_psword.encode())
 
-        cs_res = ccs_socket.recv(1024).decode()
+            cs_res = ccs_socket.recv(1024).decode()
 
-        print(cs_res)
-        if (cs_res == "ok"):
-            logged_in = True
-            c_usname = c_login_usname[:]
-            print("Here")
-        else:
+            if cs_res == "ok":
+                logged_in = True
+                c_usname = c_login_usname[:]
+                program_phase = False
+            else:
+                program_phase = False
+        elif c_req == "reg":
+            ccs_socket.send(c_req.encode())
+            ccs_socket.recv(1024)
+            ccs_socket.send(c_reg_usname.encode())
+            ccs_socket.recv(1024)
+            ccs_socket.send(c_reg_psword.encode())
+
+            cs_res = ccs_socket.recv(1024).decode()
+
+            if (cs_res == "ok"):
+                print("Register successfully")
+            else:
+                print("Failed")
+
             program_phase = False
-
     # Request friend list from central server
+
+    upd_friend_status_request(ccs_socket)
+
+    while not program_phase:
+        time.sleep(0.1)
+        continue
+
     server_host_thread = Thread(
         target = server_host,
         args = (),
@@ -266,16 +302,15 @@ def program():
 
     program_phase = False
     while not program_phase:
+        time.sleep(0.1)
         continue
-
-    get_friend_list_request(ccs_socket)
-
-    upd_friend_status_request(ccs_socket)
-  
+    
+    print("Here")
     while req != "disconn":
         program_phase = False
 
         while not program_phase:
+            time.sleep(0.1)
             continue
 
         print("Handling request: " + req)
@@ -305,7 +340,9 @@ def grid_friend_list():
     start_index = 0
     col = 0
     row = 0
+
     for i in range(start_index, start_index + 8):
+
         if i >= len(c_lst_friends):
             break
 
@@ -314,7 +351,7 @@ def grid_friend_list():
             status = "Online"
         else:
             status = "Offline"
-
+        
         btn_friend = tk.Button(
             fr_friends,
             height = 3,
@@ -323,6 +360,7 @@ def grid_friend_list():
             justify = "left",
             anchor = "w"
         )
+
         btn_friend.bind("<1>", btn_friend_handler)
         btn_friend.grid(
             row = row + 3,
@@ -331,7 +369,7 @@ def grid_friend_list():
         )
 
         lst_btn_friends.append(btn_friend)
-        
+
         if col == 2:
             col = 0
             row += 2
@@ -356,6 +394,8 @@ def btn_friend_handler(event):
     global req_args
     global program_phase
     global cs_socket
+    global txt_text_prompt
+    global btn_send
 
     c_req = "disconn"
     if not isinstance(cs_socket, int):
@@ -367,6 +407,7 @@ def btn_friend_handler(event):
     req_args = [s_usname]
 
     load_chat_promt(s_usname)
+
     program_phase = True
 
 def btn_login_register_req_handler():
@@ -388,19 +429,19 @@ def btn_login_login_handler():
     global fr_chatwindow
     global lbl_username
     global c_usname
+    global c_req
 
     c_login_usname = ent_login_usname.get()
     c_login_psword = ent_login_psword.get()
+    c_req = "login"
+
     program_phase = True
 
-    while (program_phase):
+    while program_phase:
+        time.sleep(0.1)
         continue
     
     if (cs_res == "ok"):
-        c_login_usname = ""
-        c_login_psword = ""
-        cs_res = ""
-
         fr_login.grid_forget()
         fr_chatwindow.grid(
         row = 0,
@@ -410,10 +451,11 @@ def btn_login_login_handler():
         )
 
         lbl_username.config(text = "Welcome, {}!".format(c_usname))
-    else:
-        c_login_usname = ""
-        c_login_psword = ""
-        cs_res = ""
+        program_phase = True
+
+    c_login_usname = ""
+    c_login_psword = ""
+    cs_res = ""
 
 def btn_reg_login_req_handler():
     fr_reg.grid_forget()
@@ -426,14 +468,43 @@ def btn_reg_login_req_handler():
     )
 
 def btn_reg_register_handler():
-    fr_reg.grid_forget()
+    global program_phase
+    global c_reg_usname
+    global c_reg_psword
+    global cs_res
+    global fr_login
+    global fr_chatwindow
+    global lbl_username
+    global c_usname
+    global c_req
 
-    fr_login.grid(
-        row = 0,
-        column = 0,
-        rowspan = 4,
-        columnspan = 4
-    )
+    tmp = "something"
+
+    c_reg_usname = ent_reg_usname.get()
+    c_reg_psword = ent_reg_psword.get()
+    tmp = ent_reg_confirm_psword.get()
+
+    c_req = "reg"
+
+    if tmp == c_reg_psword:
+        program_phase = True
+
+        while program_phase:
+            time.sleep(0.1)
+            continue
+        
+        if (cs_res == "ok"):
+            fr_reg.grid_forget()
+            fr_login.grid(
+                row = 0,
+                column = 0,
+                rowspan = 4,
+                columnspan = 4
+            )
+
+    c_reg_usname = ""
+    c_reg_psword = ""
+    cs_res = ""
 
 def btn_friend_list_refresh_handler():
     global req
@@ -449,6 +520,8 @@ def btn_send_handler():
     req = "send"
     program_phase = True
 
+def btn_add_friend_handler():
+    pass
 """
     Thread defintions
 """
@@ -792,10 +865,9 @@ btn_logout.grid(
 lbl_friendlist_header = tk.Label(
     fr_chatwindow,
     height = 1,
-    width = 13,
-    padx = 10,
+    width = 9,
     text = "Friend list",
-    font = ("Arial", 20, "bold"),
+    font = ("Arial", 14, "bold"),
     anchor = "w",
     bg = "green"
 )
@@ -803,7 +875,6 @@ lbl_friendlist_header = tk.Label(
 lbl_friendlist_header.grid(
     row = 2,
     column = 1,
-    columnspan = 2
 )
 
 fr_friends = tk.Frame(
@@ -819,18 +890,38 @@ fr_friends.grid(
     columnspan = 3
 )
 
-lst_btn_friends = []
 grid_friend_list()
+
+btn_add_friend = tk.Button(
+    fr_chatwindow,
+    height = 1,
+    width = 12,
+    text = "Add",
+    command = btn_add_friend_handler
+)
+btn_add_friend.grid(
+    row = 2,
+    column = 3
+)
+
+ent_add_friend = tk.Entry(
+    fr_chatwindow,
+    width = 20
+)
+ent_add_friend.grid(
+    row = 2,
+    column = 2
+)
 
 btn_friend_list_refresh = tk.Button(
     fr_chatwindow,
     height = 1,
-    width = 12,
+    width = 16,
     text = "Refresh",
     command = btn_friend_list_refresh_handler
 )
 btn_friend_list_refresh.grid(
-    row = 2,
+    row = 9,
     column = 3
 )
 
@@ -858,17 +949,6 @@ btn_friends_prev.grid(
     column = 1,
 )
 
-btn_friends_first = tk.Button(
-    fr_chatwindow,
-    height = 1,
-    width = 16,
-    text = "First"
-)
-
-btn_friends_first.grid(
-    row = 9,
-    column = 3,
-)
 
 fr_footer = tk.Frame(
     fr_chatwindow,
@@ -902,7 +982,7 @@ lbl_chat_usname = tk.Label(
     text = "Name",
     font = ("Arial", 15, "bold"),
     justify = "left",
-    anchor = "nw"
+    anchor = "sw"
 )
 
 lbl_chat_usname.grid(
@@ -927,7 +1007,7 @@ lbl_chat_detail.grid(
     columnspan = 3
 )
 
-txt_chat_prompt = tk.Text(
+txt_chat_prompt = scrolledtext.ScrolledText(
     fr_chatwindow,
     height = 14,
     width = 51,
@@ -969,10 +1049,11 @@ lbl_attached_file.grid(
     columnspan = 2
 )
 
-txt_text_prompt = tk.Text(
+txt_text_prompt = scrolledtext.ScrolledText(
     fr_chatwindow,
     height = 2,
     width = 36,
+    state = "disabled"
 )
 
 txt_text_prompt.grid(
@@ -986,6 +1067,7 @@ btn_send = tk.Button(
     height = 1,
     width = 15,
     text = "Send",
+    state = "disabled",
     command = btn_send_handler
 )
 

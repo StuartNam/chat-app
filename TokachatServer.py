@@ -7,18 +7,21 @@ from threading import *
 class TokachatDatabase():
     def __init__(self):
         self.lst_accs = [
+            ("admin", "0"),
             ("toka", "1"),
             ("harryhaha", "2"),
             ("vananhngungok", "3"),
             ("winter-oneesan", "4")
         ]
-        self.lst_onl_accs = [] #[username: str, [IP address: str, port: int]]
+        self.lst_onl_accs = {} #[username: str, [IP address: str, port: int]]
         self.lst_user_friends = {
+            "admin": ["toka", "vananhngungok", "harryhaha", "winter-oneesan"],
             "toka": ["vananhngungok", "harryhaha", "winter-oneesan"],
             "harryhaha": ["toka", "winter-oneesan"],
             "vananhngungok": ["toka"],
             "winter-oneesan": ["toka", "harryhaha"]
         }
+        self.lst_chat_histories = {}
 
     def load(self, file):
         pass
@@ -53,13 +56,17 @@ class TokachatCentralServer():
                 print("From {}: Disconnect request".format(c_addr))
 
                 csc_conn.close()
-
+                for key in self.db.lst_onl_accs.keys():
+                    if self.db.lst_onl_accs[key] == c_addr[0]:
+                        self.db.lst_onl_accs.pop(key)
+                        break
+                """
                 for acc in self.db.lst_onl_accs:
                     _, addr = acc
 
                     if c_addr[0] == addr[0]:
                         self.db.lst_onl_accs.remove(acc)
-
+                """
                 for thread_info in self.lst_running_threads:
                     thread, addr = thread_info
 
@@ -73,6 +80,24 @@ class TokachatCentralServer():
                 ls_usname = csc_conn.recv(1024).decode()
 
                 print(" - Host username: {}".format(ls_usname))
+
+                if ls_usname in self.db.lst_onl_accs.keys():
+                    print(" -> OK")
+
+                    ls_ipaddr, ls_port = self.db.lst_onl_accs[ls_usname]
+
+                    # Send address of requested host to client
+                    csc_conn.send(ls_ipaddr.encode())
+                    self.__confirm_acknowledge(csc_conn)
+
+                    csc_conn.send(str(ls_port).encode())
+                else:
+                    print(" -> Failed")
+                    csc_conn.send("null".encode())
+                    self.__confirm_acknowledge(csc_conn)
+                    csc_conn.send("-1".encode())
+
+                """
                 flag = False
                 for acc in self.db.lst_onl_accs:
                     usname, addr = acc
@@ -92,7 +117,7 @@ class TokachatCentralServer():
                     csc_conn.send("null".encode())
                     self.__confirm_acknowledge(csc_conn)
                     csc_conn.send("-1".encode())
-
+                """
                 print("CS to {}: Done Connect request".format(c_addr))
 
             elif c_req == "login":
@@ -100,10 +125,13 @@ class TokachatCentralServer():
                 print("From {}: Login request".format(c_addr))
 
                 c_usname = csc_conn.recv(1024).decode()
+                self.__acknowledge(csc_conn)
+
                 c_psword = csc_conn.recv(1024).decode()
+                print(c_psword)
 
                 c_acc = (c_usname, c_psword)
-
+                print(c_acc)
                 print(" - Username: {}\n - Password: {}".format(c_usname, c_psword))
                 if c_acc in self.db.lst_accs:
                     print(" -> OK")
@@ -119,20 +147,33 @@ class TokachatCentralServer():
                 # Exception handling: Not yet
                 print("From {}: Register request".format(c_addr))
 
-                usname = csc_conn.recv(1024).decode()
+                c_reg_usname = csc_conn.recv(1024).decode()
                 self.__acknowledge(csc_conn)
 
-                psword = csc_conn.recv(1024).decode()
+                c_reg_psword = csc_conn.recv(1024).decode()
 
-                acc = [usname, psword]
+                c_reg_acc = (c_reg_usname, c_reg_psword)
 
-                print(" - Username: {}\n - Password: {}".format(usname, psword))
+                print(" - Username: {}\n - Password: {}".format(c_reg_usname, c_reg_psword))
 
-                self.db.lst_accs.append(acc)
+                flag = False
+                for acc in self.db.lst_accs:
+                    usname, _ = acc
+                    if (usname == c_reg_usname):
+                        flag = True
+                        csc_conn.send("failed".encode())
 
-                csc_conn.send("ok".encode())
+                        print(" -> Failed: Username already exists")
+                        break
+                if not flag:
+                    self.db.lst_accs.append(c_reg_acc)
+                    self.db.lst_user_friends.update({c_reg_usname: ["admin"]})
+                    self.db.lst_user_friends["admin"].append(c_reg_usname)
+                    csc_conn.send("ok".encode())
 
-                print(" -> OK")
+                    print(" -> OK")
+
+                print(self.db.lst_accs)
 
                 print("CS to {}: Done Register request".format(c_addr))
 
@@ -162,12 +203,12 @@ class TokachatCentralServer():
 
                 print(" -> OK")
 
-                self.db.lst_onl_accs.append([ls_usname, (ls_ipaddr, ls_port)])
+                self.db.lst_onl_accs.update({ls_usname: (ls_ipaddr, ls_port)})
 
                 print("CS: Done Update address request")
 
             elif c_req == "updfrstt":
-                print("From {}: Get friend list request")
+                print("From {}: Update friend status request")
 
                 while True:
                     fd_usname = csc_conn.recv(1024).decode()
@@ -175,6 +216,19 @@ class TokachatCentralServer():
                     if fd_usname == "--":
                         break
 
+                    if fd_usname in self.db.lst_onl_accs.keys():
+                        ipaddr, port = self.db.lst_onl_accs[fd_usname]
+
+                        csc_conn.send(ipaddr.encode())
+                        self.__confirm_acknowledge(csc_conn)
+
+                        csc_conn.send(str(port).encode())
+                    else:
+                        csc_conn.send("null".encode())
+                        self.__confirm_acknowledge(csc_conn)
+
+                        csc_conn.send("-1".encode())
+                    """
                     flag = False
                     for acc in self.db.lst_onl_accs:
                         usname, addr = acc
@@ -194,8 +248,8 @@ class TokachatCentralServer():
                         self.__confirm_acknowledge(csc_conn)
 
                         csc_conn.send("-1".encode())
-
-                print("CS: Done Get friend list request")
+                    """
+                print("CS: Done Update friend status request")
 
             elif c_req == "gfrlst":
                 c_usname = csc_conn.recv(1024).decode()
@@ -233,6 +287,8 @@ class TokachatCentralServer():
                 thread, addr = thread_info
                 print("Joining thread {}".format(addr))
                 thread.join()
+            
+            self.lst_done_threads = []
 
 def run():
     db = TokachatDatabase()
