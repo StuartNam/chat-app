@@ -277,7 +277,7 @@ def run():
 
     Tokachat_central_server.start()
 
-    db.update("./database.txt")
+    #db.update("./database.txt")
 
 if __name__ == "__main__":
     run()
