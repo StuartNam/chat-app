@@ -136,7 +136,7 @@ def connect_server_request(ccs_socket, s_usname):
         btn_send_msg.config(state = "normal")   
         btn_attach_file.config(state = "normal")
         txt_text_prompt.delete("1.0", tk.END)
-
+        btn_send_file.config(state = "normal")
         connected_usname = s_usname
         return cs_socket
     else:
